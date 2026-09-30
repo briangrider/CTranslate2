@@ -19,13 +19,20 @@ namespace ctranslate2 {
     template <typename curandState>
     class ScopedCurandStates {
     public:
+      static constexpr size_t num_init_threads = 32;
+
       ScopedCurandStates(size_t num_states)
         : _allocator(get_allocator<Device::CUDA>())
       {
-        constexpr size_t num_init_threads = 32;
         const size_t blocks = ceil_divide(num_states, num_init_threads);
         _num_states = blocks * num_init_threads;
         _states = static_cast<curandState*>(_allocator.allocate(_num_states * sizeof (curandState)));
+        init();
+      }
+
+      // Starts every state over from the current seed.
+      void init() {
+        const size_t blocks = _num_states / num_init_threads;
         init_curand_states_kernel<<<blocks, num_init_threads, 0, cuda::get_cuda_stream()>>>(
           _states, get_random_seed());
       }
@@ -49,10 +56,15 @@ namespace ctranslate2 {
     };
 
     static thread_local std::unique_ptr<ScopedCurandStates<curandStatePhilox4_32_10_t>> states;
+    static thread_local unsigned int states_seed_version = 0;
 
     curandStatePhilox4_32_10_t* get_curand_states(size_t num_states) {
+      const unsigned int version = get_random_seed_version();
       if (!states || num_states > states->num_states())
         states = std::make_unique<ScopedCurandStates<curandStatePhilox4_32_10_t>>(num_states);
+      else if (states_seed_version != version)
+        states->init();  // set_random_seed was called since these states were seeded
+      states_seed_version = version;
       return states->states();
     }
 

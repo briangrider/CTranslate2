@@ -74,7 +74,8 @@ PYBIND11_MODULE(_ext, m)
          )pbdoc");
 
   m.def("set_random_seed", &ctranslate2::set_random_seed, py::arg("seed"),
-        "Sets the seed of random generators.");
+        "Sets the seed of random generators. It takes effect on every thread at its next random "
+        "draw, including threads that have already drawn.");
 
   ctranslate2::python::register_logging(m);
   ctranslate2::python::register_storage_view(m);
